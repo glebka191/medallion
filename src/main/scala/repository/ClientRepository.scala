@@ -1,6 +1,6 @@
 package repository
 
-import dm.{Client, ClientId, ClientPostForm, ClientUpdate}
+import dm.{Client, ClientId, ClientPatchForm, ClientPostForm}
 import zio.{Has, UIO, URIO, ZIO}
 
 object ClientRepository extends Serializable{
@@ -16,10 +16,7 @@ object ClientRepository extends Serializable{
 
     def create(clientForm: ClientPostForm): UIO[Client]
 
-    def update(
-                id: ClientId,
-                clientUpdate: ClientUpdate
-              ): UIO[Option[Client]]
+    def update(id: ClientId, clientPatchForm: ClientPatchForm): UIO[Option[Client]]
   }
 
   val getAll: URIO[Has[ClientRepository.Service], List[Client]] =
@@ -36,7 +33,7 @@ object ClientRepository extends Serializable{
 
   def update(
               id: ClientId,
-              clientUpdate: ClientUpdate
-            ): URIO[Has[ClientRepository.Service], Option[Client]] = ZIO.accessM(_.get.update(id, clientUpdate))
+              clientPatchForm: ClientPatchForm
+              ): URIO[Has[ClientRepository.Service], Option[Client]] = ZIO.accessM(_.get.update(id, clientPatchForm))
 
 }

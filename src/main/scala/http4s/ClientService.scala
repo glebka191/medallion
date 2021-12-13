@@ -1,7 +1,7 @@
 package http4s
 
 import dm.ClientPostForm.decoder
-import dm.{ClientId, ClientPostForm}
+import dm.{ClientId, ClientPatchForm, ClientPostForm}
 import io.circe.{Decoder, Encoder}
 import org.http4s._
 import org.http4s.circe._
@@ -40,6 +40,25 @@ object ClientService {
             .create(clientForm)
             .map(ClientWithUri(rootUri, _))
             .flatMap(Created(_))
+        }
+
+      case DELETE -> Root / LongVar(id) =>
+        for {
+          client   <- ClientRepository.getById(ClientId(id))
+          result <- client
+            .map(x => ClientRepository.delete(x.id))
+            .fold(NotFound())(_.flatMap(Ok(_)))
+        } yield result
+
+      case DELETE -> Root =>
+        ClientRepository.deleteAll *> Ok()
+
+      case req @ PATCH -> Root / LongVar(id) =>
+        req.decode[ClientPatchForm] { updateForm =>
+          for {
+            update   <- ClientRepository.update(ClientId(id), updateForm)
+            response <- update.fold(NotFound())(x => Ok(ClientWithUri(rootUri, x)))
+          } yield response
         }
     }
 
