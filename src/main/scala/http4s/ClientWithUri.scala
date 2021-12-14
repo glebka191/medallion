@@ -11,9 +11,9 @@ object ClientWithUri{
   def apply(basePath: String,client: Client): ClientWithUri = ClientWithUri(
     client.id.value,
     s"$basePath/${client.id.value}",
-    client.name,
-    client.email,
-    client.password
+    client.clientLoad.name,
+    client.clientLoad.email,
+    client.clientLoad.password
   )
 
   implicit val encoder: Encoder[ClientWithUri] = deriveEncoder
