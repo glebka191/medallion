@@ -1,12 +1,17 @@
 package repository
 
+import cats.effect.Blocker
 import cats.implicits._
+import config.{DatabaseConfig, getDatabaseConfig}
 import dm._
 import doobie._
 import doobie.free.connection
+import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
+import org.flywaydb.core.Flyway
 import zio._
+import zio.blocking.Blocking
 import zio.interop.catz._
 
 
@@ -56,6 +61,50 @@ private class DoobieRepository(xa: Transactor[Task]) extends ClientRepository.Se
       .orDie
 }
 object DoobieRepository {
+  def layer: ZLayer[Blocking with DatabaseConfig, Throwable, Has[ClientRepository.Service]] = {
+    def initDb(cfg: DatabaseConfig.Config): Task[Unit] =
+      Task {
+        Flyway
+          .configure()
+          .dataSource(cfg.url, cfg.user, cfg.password)
+          .load()
+          .migrate()
+      }.unit
+
+    def mkTransactor(
+                      cfg: DatabaseConfig.Config
+                    ): ZManaged[Blocking, Throwable, HikariTransactor[Task]] =
+      ZIO.runtime[Blocking].toManaged_.flatMap { implicit rt =>
+        for {
+          transactEC <- Managed.succeed(
+            rt.environment
+              .get[Blocking.Service]
+              .blockingExecutor
+              .asEC
+          )
+          connectEC   = rt.platform.executor.asEC
+          transactor <- HikariTransactor
+            .newHikariTransactor[Task](
+              cfg.driver,
+              cfg.url,
+              cfg.user,
+              cfg.password,
+              connectEC,
+              Blocker.liftExecutionContext(transactEC)
+            )
+            .toManaged
+        } yield transactor
+      }
+
+    ZLayer.fromManaged {
+      for {
+        cfg        <- getDatabaseConfig.toManaged_
+        _          <- initDb(cfg).toManaged_
+        transactor <- mkTransactor(cfg)
+      } yield new DoobieRepository(transactor)
+    }
+  }
+
   object SqlQueries {
     def create(client: ClientLoad): Update0 =
       sql"""
